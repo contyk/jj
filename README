@@ -1,0 +1,84 @@
+jj
+
+jj is a simple FIFO and filesystem based Jabber/XMPP client. jj is inspired by
+ii IRC client.
+
+jj is more tool than traditional instant messanger client. It can be easily
+extended with normal unix tools. It is perfect for bots and notifications.
+Interaction with jj is done by writing and reading files from the server
+directory which jj creates.
+
+Quick getting started guide
+
+To compile jj you need loudmouth and glib development libraries. On Debian
+install these packages:
+
+libloudmouth1-dev
+libglib2.0-dev
+
+Then you can compile jj with make:
+
+make
+
+Now you should have jj executable. Start it with the line (replace server and
+user stuff with your own):
+
+./jj -s server.tld -j user@server.tld -u user -p password -m User
+
+It will create server.tld directory that will contain in file used to
+communicate to jj and out file for the output. Commands recognize at this point
+are:
+
+/join channel@chat.server.tld
+/msg username@server.tld
+
+for every joined muc there will be a new directory in server.tld/mucs with its
+own in and out files. Normal users will get a directory in server.tld directory
+that works in the same way. After you have some mucs or users in server.tld you
+can just write to in files and read the outfiles. Unix tool echo is nice way to
+to write, example:
+
+echo "/join chat@conference.jabber.org" > server.tld/in
+
+Here is an example of the directory tree structure from connection to
+server.tld.
+
+server.tld
+|-- in
+|-- mucs
+|   |-- lobby@conference.server.tld
+|   |   |-- in
+|   |   `-- out
+|   |-- bar@conference.server.tld
+|   |   |-- in
+|   |   `-- out
+|   |-- basement@conference.server.tld
+|   |   |-- in
+|   |   `-- out
+|   `-- backstage@conference.server.tld
+|       |-- in
+|       `-- out
+|-- out
+`-- user@server.tld
+    |-- in
+    `-- out
+
+Usage example
+
+Here is a small usage example that shows basic usage. First start up jj. Then
+join some mucs and finally follow mucs output with tail.
+
+./jj -s server.tld -j user@server.tld -u user -p password -m User
+echo "/join lobby@conference.server.tld" > server.tld/in
+echo "/join bar@conference.server.tld" > server.tld/in
+echo "/join basement@conference.server.tld" > server.tld/in
+echo "/join backstage@conference.server.tld" > server.tld/in
+cd server.tld/mucs
+tail -f lobby@conference.server.tld/out bar@conference.server.tld/out basement@conference.server.tld/out backstage@conference.server.tld
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+xmpp: petteri jabber ru
+Last modified: Tue Nov 17 18:39:58 EET 2009
+
+See also web page at 23.fi/jj
