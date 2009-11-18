@@ -393,6 +393,25 @@ static int jj_send_join(gchar *muc) {
 }
 
 
+static void jj_send_topic(const gchar *muc, const gchar *topic) {
+  LmMessage *m;
+  gchar *xml;
+
+  m = lm_message_new_with_sub_type(muc,
+				   LM_MESSAGE_TYPE_MESSAGE,
+                                   LM_MESSAGE_SUB_TYPE_GROUPCHAT);
+  lm_message_node_add_child(m->node, "subject", topic);
+  xml = lm_message_node_to_string(m->node);
+  if (!lm_connection_send (jj_connection, m, NULL)) {
+    jj_error("Failed to send message:'%s'\n", xml);
+  } else {
+    jj_debug("Sent message:'%s'\n", xml);
+  }
+  lm_message_unref(m);
+  g_free(xml);
+}
+
+
 static void jj_send_ver(char *to, char* id) {
   LmMessage *msg;
   LmMessageNode *node;
@@ -569,7 +588,9 @@ static LmHandlerResult jj_handle_iq(LmMessageHandler *handler,
 static int jj_parse_input(const gchar *input,
 			   const gchar *path) {
   gchar **line;
+  gchar **line2;
   gchar *jid;
+  gchar *muc;
   int return_value = 0;
 
   /* message sent to server. Like /join or /msg */
@@ -631,8 +652,25 @@ static int jj_parse_input(const gchar *input,
 
     if (g_strv_length(line) > 3 &&
         strcmp(line[g_strv_length(line) -3], "mucs") == 0) {
-      jj_send_message_to_muc(line[g_strv_length(line) - 2], input);
-    } else {
+      /* muc message */
+      muc = line[g_strv_length(line) - 2];
+      /* check if this is command to muc */
+      if (input[0] == '/' && strlen(input) > 3 && strchr(input, ' ') != NULL) {
+        line2 = g_strsplit(input, " ", 2);
+        switch (input[1]) {
+        case 't': /* /topic */
+          {
+            jj_send_topic(muc, line2[1]);
+          }
+        default:
+          break;
+        }
+        g_strfreev(line2);
+      }
+      else { /* not command */
+        jj_send_message_to_muc(muc, input);
+      }
+    } else { /* normal message (not groupchat ) */
       jj_send_message(line[g_strv_length(line) - 2], input);
     }
     g_strfreev(line);
