@@ -424,34 +424,51 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                                          LmConnection *connection,
                                          LmMessage *m,
                                          gpointer data) {
-  gchar *msg;
   gchar **line;
   gchar *outpath;
   gchar *nick;
   gchar *xml;
-  LmMessageNode *child = lm_message_node_get_child(m->node, "body");
+  const gchar *body = NULL;
+  const gchar *subject = NULL;
+  LmMessageNode *child;
 
   xml = lm_message_node_to_string(m->node);
   jj_debug("\n%s\n", xml);
 
+  child = lm_message_node_get_child(m->node, "body");
   if (child != NULL) {
-    msg = (gchar *) child->value ? child->value : "";
-    line = g_strsplit(lm_message_node_get_attribute(m->node, "from"),
-                      "/", 2);
-
-    if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_GROUPCHAT) {
-      outpath = g_strconcat(jj_user.base_path, "/mucs/", line[0], "/out", NULL);
-      nick = line[1];
-    } else { /* not group chat */
-      outpath = g_strconcat(jj_user.base_path, "/", line[0], "/out", NULL);
-      nick = line[0];
-    }
-    jj_writeout(outpath, "<%s> %s\n", nick, msg);
-    g_free(outpath);
-    g_strfreev(line);
-  } else {
-    jj_printf("no child\n"); /* ? */
+    body = (gchar *) child->value ? child->value : "";
   }
+  child = lm_message_node_get_child(m->node, "subject");
+  if (child != NULL) {
+    subject = (gchar *) child->value ? child->value : "";
+  }
+  line = g_strsplit(lm_message_node_get_attribute(m->node, "from"),
+                    "/", 2);
+
+  if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_GROUPCHAT) {
+    nick = line[1];
+    outpath = g_strconcat(jj_user.base_path, "/mucs/", line[0], "/out", NULL);
+    /* first see if this is a topic message */
+    if (subject != NULL) {
+      /* subject can be from room or form user */
+      if (g_strv_length(line) > 1) { /* from user */
+        nick = line[1];
+        jj_writeout(outpath, "-!- %s changed the topic of %s to: %s\n",
+                    nick, line[0], subject);
+      } else { /* from room */
+        jj_writeout(outpath, "-!- Topic for %s: %s\n", line[0], subject);
+      }
+    } else {
+      jj_writeout(outpath, "<%s> %s\n", nick, body);
+    }
+  } else { /* not groupchat */
+    nick = line[0];
+    outpath = g_strconcat(jj_user.base_path, "/", nick, "/out", NULL);
+    jj_writeout(outpath, "<%s> %s\n", nick, body);
+  }
+  g_free(outpath);
+  g_strfreev(line);
   g_free(xml);
   return LM_HANDLER_RESULT_REMOVE_MESSAGE;
 }
