@@ -33,6 +33,7 @@
 
 #include <fcntl.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -665,6 +666,11 @@ static int jj_parse_input(const gchar *input,
                                 }
                                 g_strfreev(line2);
                         } else { /* not command */
+                                /* FIXME It would nicer to ratelimit
+                                 * messages to server after server
+                                 * respons with flood error, but this
+                                 * works for now */
+                                sleep(2);
                                 jj_send_message_to_muc(muc, input);
                         }
                 } else { /* normal message (not groupchat ) */
