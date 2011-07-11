@@ -10,6 +10,12 @@ directory which jj creates.
 
 Quick getting started guide
 
+Latest official jj version is 1. It can be downloaded here:
+http://23.fi/jj/jj-1.tar.gz .
+
+The development version can be cloned with git from jj's github page (
+https://github.com/Petteri/jj ).
+
 To compile jj you need loudmouth and glib development libraries. On Debian
 install these packages:
 
@@ -65,6 +71,8 @@ server.tld
 
 Usage example
 
+Multi-User Chat
+
 Here is a small usage example that shows basic usage. First start up jj. Then
 join some mucs and finally follow mucs output with tail.
 
@@ -76,9 +84,32 @@ echo "/join backstage@conference.server.tld" > server.tld/in
 cd server.tld/mucs
 tail -f lobby@conference.server.tld/out bar@conference.server.tld/out basement@conference.server.tld/out backstage@conference.server.tld
 
+1-to-1 Chat
+
+When chatting to only one person you should first initiate the chat by sending
+first message to server in -file. After that you should use the directory
+created for the user
+
+./jj -s server.tld -j user@server.tld -u user -p password -m User
+echo "/msg petteri@jabber.ru hello" > server.tld/in
+tail -f server.tld/petteri@jabber.ru/out
+echo "Petteri are you getting the messages?" > server.tld/petteri@jabber.ru/out
+
+Source Code Repository and Issue tracker
+
+jj's source code is hosted at Github. There is also an issue tracker which can
+be used to report bugs.
+
+You can also build debug version of jj with make debug, just remember to do
+make clean first!
+
+Contact the author & support
+
+You can contact the author by sending email to petteri gmail com or sending
+XMPP messages to petteri jabber ru. You can also support jj with Bitcoin
+(Bitcoin address: 1CCC3pdE3iHQdBiiqgsbZNsghPzxYoEfxE ) if you wish.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 xmpp: petteri jabber ru
-Last modified: Tue Nov 17 18:39:58 EET 2009
-
-See also web page at 23.fi/jj
+Last modified: Mon Jul 11 15:53:08 EEST 2011

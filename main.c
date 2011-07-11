@@ -447,7 +447,7 @@ static void jj_send_ver(char *to, char* id) {
         lm_message_node_add_child(node, "name",
                                   "jj");
         lm_message_node_add_child(node, "version",
-                                  "0.1a");
+                                  "1");
 
         lm_message_node_add_child(node, "os", "Debian GNU/Linux");
         lm_connection_send(jj_connection, msg, NULL);
