@@ -87,6 +87,7 @@ typedef struct {
 
 /* some prototypes */
 static void jj_make_named_pipe(gchar *path, gboolean muc);
+static void jj_make_named_pipe_fullpath(gchar *fullpath);
 static void jj_make_named_pipe_1(gchar *path);
 
 
@@ -264,6 +265,9 @@ static void jj_writeout(char *path, char *fmt, ...) {
         char outstr[200] = "23:23";
         time_t t;
         struct tm *tmp;
+        char *without_suffix;
+        const char *suffix;
+        int len = 0;
 
         jj_debug("path=%s\n", path);
 
@@ -285,7 +289,19 @@ static void jj_writeout(char *path, char *fmt, ...) {
                 va_end(ap);
                 fclose(output);
         } else {
-                perror(NULL);
+                /* output does not exist. Make sure that path ends
+                 * with /out and if it does create needed directory
+                 * and named pipe */
+                len = strlen(path);
+                if (len > 5) {
+                        suffix = &path[len-4];
+                        if (strcmp("/out", suffix) == 0) {
+                                without_suffix = strndup(path, len-4);
+                                /* Will try to create it and reports error if fails */
+                                jj_make_named_pipe_fullpath(without_suffix);
+                                free(without_suffix);
+                        }
+                }
         }
 }
 
@@ -721,12 +737,45 @@ static gboolean jj_read_pipe(GIOChannel *channel,
 }
 
 
+static void jj_make_named_pipe_fullpath(gchar *fullpath) {
+        struct stat buf;
+        gchar *outpath;
+
+        if (stat(fullpath, &buf) != 0) {
+                if (errno == ENOENT) { /* no such dir, lets create it */
+                        jj_debug("creating %s\n", fullpath);
+                        if (mkdir(fullpath, S_IRWXU) != 0) {
+                                perror("directory creating failed");
+                                goto out;
+                        }
+                        /* try again */
+                        if (stat(fullpath, &buf) != 0) {
+                                perror("jj_make_named_pipe_fullpath");
+                                goto out;
+                        }
+                } else {
+                        perror("jj_make_named_pipe_fullpath");
+                        goto out;
+                }
+        }
+
+        if (!S_ISDIR(buf.st_mode)) {
+                jj_error("%s not a dir\n", fullpath);
+                goto out;
+        }
+
+        outpath = g_strconcat(fullpath, "/in", NULL);
+        jj_make_named_pipe_1(outpath);
+        g_free(outpath);
+out:
+        return;
+}
+
+
 /* wrapper function to do the dir etc, use this instead of
    jj_make_named_pipe_1 */
 static void jj_make_named_pipe(gchar *path, gboolean muc) {
-        struct stat buf;
         gchar *fullpath;
-        gchar *outpath;
 
         if (muc == TRUE) {
                 fullpath = g_strconcat(jj_user.base_path, "/mucs/", path, NULL);
@@ -735,34 +784,7 @@ static void jj_make_named_pipe(gchar *path, gboolean muc) {
         }
 
         jj_debug("fullpath %s\n", fullpath);
-
-        if (stat(fullpath, &buf) != 0) {
-                if (errno == ENOENT) { /* no such dir, lets create it */
-                        if (mkdir(fullpath, S_IRWXU) != 0) {
-                                perror("trying to make dir");
-                                goto out;
-                        }
-                        /* try again */
-                        if (stat(fullpath, &buf) != 0) {
-                                perror("jj_make_named_pipe");
-                                goto out;
-                        }
-                } else {
-                        perror("jj_make_named_pipe");
-                        goto out;
-                }
-        }
-
-        if (!S_ISDIR(buf.st_mode)) {
-                jj_error("%s not a dir\n", path);
-                goto out;
-        }
-
-        outpath = g_strconcat(fullpath, "/in", NULL);
-        jj_make_named_pipe_1(outpath);
-        g_free(outpath);
-
-out:
+        jj_make_named_pipe_fullpath(fullpath);
         g_free(fullpath);
         return;
 }
@@ -788,6 +810,7 @@ static void jj_make_named_pipe_1(gchar *path) {
                                       jdata, NULL);
                 g_source_attach(source, jj_context);
                 g_source_unref(source);
+                jj_debug("created named pipe %s\n", path);
         }
 }
 
