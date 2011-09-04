@@ -1,0 +1,40 @@
+#!/bin/bash
+# Petteri Klemola 2011
+# Named pipe can block, for example if jj is not processessing
+# anything. This will cause big problems in scripts. Fecho will
+# timeout the write request, if the message is not processed after 2
+# seconds and output an error message.
+
+usage() {
+    echo "fecho: Write text to named pipe, if pipe is not processing, then timeout after 2 seconds"
+    echo "Example: fecho \"Petteri rulez\" /tmp/23.fifo"
+}
+
+fifo_echo() {
+    set +e
+    MSG="$1"
+    FIFOFILE="$2"
+    if [ -p $FIFOFILE ]; then
+        echo $MSG > $FIFOFILE &
+        PID=$!
+        sleep 2
+        kill $PID > /dev/null 2>&1 || true
+        wait $PID &> /dev/null
+        if [ $? -eq 143 ]; then
+            echo "Timeout writing \"$MSG\" to $FIFOFILE"
+        fi
+    else
+	echo "$FIFOFILE is not valid fifo, see manual page of mkfifo(1)"
+	usage
+	exit 1
+    fi
+    set -e
+}
+
+if [ $# -ne 2 ]; then
+    echo "Invalid number of arguments"
+    usage
+    exit 1
+fi
+
+fifo_echo "$1" "$2" &
