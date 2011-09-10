@@ -7,7 +7,9 @@
 
 usage() {
     echo "fecho: Write text to named pipe, if pipe is not processing, then timeout after 2 seconds"
-    echo "Example: fecho \"Petteri rulez\" /tmp/23.fifo"
+    echo "fecho can be used in two ways:"
+    echo "Example 1 (text from stdin): echo \"Petteri rulez\" | fecho /tmp/23.fifo"
+    echo "Example 2 (text as first parameter): fecho \"Petteri rulez\" /tmp/23.fifo"
 }
 
 fifo_echo() {
@@ -30,6 +32,15 @@ fifo_echo() {
     fi
     set -e
 }
+
+if [ $# -eq 1 ]; then
+    # expecting input from stdin
+    while read line; do
+        fifo_echo "$line" "$1" &
+    done
+    exit 0
+fi
+
 
 if [ $# -ne 2 ]; then
     echo "Invalid number of arguments"
