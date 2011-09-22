@@ -273,8 +273,8 @@ static void jj_writeout(char *path, char *fmt, ...) {
 
         /* create output file if it does not exist yet */
         output = fopen(path, "a");
-	if (output == NULL) {
-		/* output does not exist. Make sure that path ends
+        if (output == NULL) {
+                /* output does not exist. Make sure that path ends
                  * with /out and if it does create needed directory
                  * and named pipe */
                 len = strlen(path);
@@ -285,11 +285,11 @@ static void jj_writeout(char *path, char *fmt, ...) {
                                 /* Will try to create it and reports error if fails */
                                 jj_make_named_pipe_fullpath(without_suffix);
                                 free(without_suffix);
-				/* Try again to open output file */
-				output = fopen(path, "a");
+                                /* Try again to open output file */
+                                output = fopen(path, "a");
                         }
                 }
-	}
+        }
         if (output != NULL) {
                 t = time(NULL);
                 tmp = localtime(&t);
@@ -306,7 +306,7 @@ static void jj_writeout(char *path, char *fmt, ...) {
                 va_end(ap);
                 fclose(output);
         } else {
-		jj_error("cannot open %s for output\n", path);
+                jj_error("cannot open %s for output\n", path);
         }
 }
 
@@ -704,8 +704,8 @@ static int jj_parse_input(const gchar *input,
 
 
 static gboolean jj_read_pipe(GIOChannel *channel,
-			     GIOCondition condition,
-			     gpointer data) {
+                             GIOCondition condition,
+                             gpointer data) {
         gchar *str;
         GError *error = NULL;
         int fd;
@@ -821,8 +821,8 @@ static void jj_make_named_pipe_1(gchar *path) {
 
 
 void jj_callback_auth(LmConnection *con,
-		      gboolean success,
-		      void *x) {
+                      gboolean success,
+                      void *x) {
         if (!success) {
                 jj_error("connection failed");
                 jj_write_out_server("Authentication to %s failed\n",
@@ -844,8 +844,8 @@ void jj_callback_auth(LmConnection *con,
 
 
 void jj_callback_open(LmConnection *con,
-		      gboolean success,
-		      void *x) {
+                      gboolean success,
+                      void *x) {
         if (!success) {
                 jj_error("Connecting failed");
                 jj_write_out_server("Connecting to server %s failed\n",
@@ -867,8 +867,8 @@ void jj_callback_open(LmConnection *con,
 
 
 void jj_callback_close(LmConnection *con,
-		       LmDisconnectReason  reason,
-		       gpointer jj_user) {
+                       LmDisconnectReason  reason,
+                       gpointer jj_user) {
         const char *str;
         switch (reason) {
         case LM_DISCONNECT_REASON_OK:
