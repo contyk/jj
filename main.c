@@ -273,6 +273,23 @@ static void jj_writeout(char *path, char *fmt, ...) {
 
         /* create output file if it does not exist yet */
         output = fopen(path, "a");
+	if (output == NULL) {
+		/* output does not exist. Make sure that path ends
+                 * with /out and if it does create needed directory
+                 * and named pipe */
+                len = strlen(path);
+                if (len > 5) {
+                        suffix = &path[len-4];
+                        if (strcmp("/out", suffix) == 0) {
+                                without_suffix = strndup(path, len-4);
+                                /* Will try to create it and reports error if fails */
+                                jj_make_named_pipe_fullpath(without_suffix);
+                                free(without_suffix);
+				/* Try again to open output file */
+				output = fopen(path, "a");
+                        }
+                }
+	}
         if (output != NULL) {
                 t = time(NULL);
                 tmp = localtime(&t);
@@ -289,19 +306,7 @@ static void jj_writeout(char *path, char *fmt, ...) {
                 va_end(ap);
                 fclose(output);
         } else {
-                /* output does not exist. Make sure that path ends
-                 * with /out and if it does create needed directory
-                 * and named pipe */
-                len = strlen(path);
-                if (len > 5) {
-                        suffix = &path[len-4];
-                        if (strcmp("/out", suffix) == 0) {
-                                without_suffix = strndup(path, len-4);
-                                /* Will try to create it and reports error if fails */
-                                jj_make_named_pipe_fullpath(without_suffix);
-                                free(without_suffix);
-                        }
-                }
+		jj_error("cannot open %s for output\n", path);
         }
 }
 
