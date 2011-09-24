@@ -190,7 +190,7 @@ static int jj_make_mucs_path(void) {
 }
 
 
-static int jj_scan_for_fifos() {
+static int jj_scan_for_fifos(const gchar *scan_dir) {
         DIR *d;
         struct dirent *drt;
         struct stat sb;
@@ -198,15 +198,15 @@ static int jj_scan_for_fifos() {
         gchar *fifo_path;
         gchar *full_path;
 
-        d = opendir(jj_user.base_path);
+        d = opendir(scan_dir);
 
         if (d != NULL) {
                 while ((drt = readdir(d)) != NULL) {
-                        full_path = g_strconcat(jj_user.base_path, "/", drt->d_name, NULL);
+                        full_path = g_strconcat(scan_dir, "/", drt->d_name, NULL);
                         if ((stat(full_path, &sb)) == -1) {
                                 g_free(full_path);
                                 perror("stat");
-                                jj_error("stat failed for %s", full_path);
+                                jj_error("stat failed for %s\n", full_path);
                                 continue;
                         }
                         g_free(full_path);
@@ -219,7 +219,7 @@ static int jj_scan_for_fifos() {
                         if (strcmp(drt->d_name, "mucs") != 0) {
                                 /* found some other directory, propably just a normal
                                    jid. Lets find out fifo */
-                                fifo_path = g_strconcat(jj_user.base_path, "/", drt->d_name, "/in" ,NULL);
+                                fifo_path = g_strconcat(scan_dir, "/", drt->d_name, "/in" ,NULL);
                                 jj_debug("fifo_path=%s\n", fifo_path);
                                 if (stat(fifo_path, &sb2) != -1 && S_ISFIFO(sb2.st_mode)) {
                                         /* found fifo add it your watchs list */
@@ -235,7 +235,7 @@ static int jj_scan_for_fifos() {
                 }
                 closedir(d);
         } else {
-                jj_error("Error opening base path: %s", jj_user.base_path);
+                jj_error("Error opening base path: %s\n", scan_dir);
                 return -1;
         }
         return JJ_SUCCESS;
@@ -265,7 +265,7 @@ static void jj_writeout(char *path, char *fmt, ...) {
         char outstr[200] = "23:23";
         time_t t;
         struct tm *tmp;
-        char *without_suffix;
+        char *without_suffix = NULL;
         const char *suffix;
         int len = 0;
 
@@ -403,7 +403,7 @@ static int jj_send_join(gchar *muc) {
         jj_debug("%s\n", xml);
 
         if (!lm_connection_send(jj_connection, msg, NULL)) {
-                jj_error("Cannot join muc %s", muc);
+                jj_error("Cannot join muc %s\n", muc);
                 ret = 1; /* define error */
         }
 
@@ -504,7 +504,16 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                 }
         } else { /* not groupchat */
                 nick = line[0];
-                outpath = g_strconcat(jj_user.base_path, "/", nick, "/out", NULL);
+                if (jj_user_muc_find(nick) == NULL) {
+                        outpath = g_strconcat(jj_user.base_path, "/",
+                                              nick, "/out", NULL);
+
+                } else {
+                        outpath = g_strconcat(jj_user.base_path, "/mucs/",
+                                              line[0], "/", line[1],
+                                              "/out", NULL);
+                        nick = line[1];
+                }
                 jj_writeout(outpath, "<%s> %s\n", nick, body);
         }
         g_free(outpath);
@@ -633,6 +642,11 @@ static int jj_parse_input(const gchar *input,
                                 if (jj_send_join(jid) == JJ_SUCCESS) {
                                         jj_make_named_pipe(jid, TRUE);
                                         jj_user_muc_add(jid);
+                                        /* Scan for all MUC users */
+                                        muc = g_strconcat(jj_user.base_path,
+                                                          "/mucs/", jid, NULL);
+                                        jj_scan_for_fifos(muc);
+                                        g_free(muc);
                                 }
                                 g_free(jid);
                         }
@@ -694,6 +708,14 @@ static int jj_parse_input(const gchar *input,
                                 sleep(2);
                                 jj_send_message_to_muc(muc, input);
                         }
+                } else if (g_strv_length(line) > 4 &&
+                           strcmp(line[g_strv_length(line) -4], "mucs") == 0) {
+                        muc = g_strconcat(line[g_strv_length(line) -3], "/",
+                                          line[g_strv_length(line) -2], NULL);
+                        /* "private" message from MUC */
+                        jj_debug("MUC private to %s\n", muc);
+                        jj_send_message(muc, input);
+                        g_free(muc);
                 } else { /* normal message (not groupchat ) */
                         jj_send_message(line[g_strv_length(line) - 2], input);
                 }
@@ -824,7 +846,7 @@ void jj_callback_auth(LmConnection *con,
                       gboolean success,
                       void *x) {
         if (!success) {
-                jj_error("connection failed");
+                jj_error("connection failed\n");
                 jj_write_out_server("Authentication to %s failed\n",
                                     jj_user.server);
         } else {
@@ -847,7 +869,7 @@ void jj_callback_open(LmConnection *con,
                       gboolean success,
                       void *x) {
         if (!success) {
-                jj_error("Connecting failed");
+                jj_error("Connecting failed\n");
                 jj_write_out_server("Connecting to server %s failed\n",
                                     jj_user.server);
         } else {
@@ -861,7 +883,7 @@ void jj_callback_open(LmConnection *con,
                                                 NULL,
                                                 NULL,
                                                 NULL))
-                        jj_error("authentication faield");
+                        jj_error("authentication faield\n");
         }
 }
 
@@ -985,7 +1007,7 @@ int main(int argc, char *argv[]) {
                                         NULL);
 
         if (jj_make_mucs_path() != JJ_SUCCESS ||
-            jj_scan_for_fifos() != JJ_SUCCESS) {
+            jj_scan_for_fifos(jj_user.base_path) != JJ_SUCCESS) {
                 exit(EXIT_FAILURE);
         }
 
@@ -1024,7 +1046,7 @@ int main(int argc, char *argv[]) {
                                 NULL,
                                 NULL,
                                 &error)) {
-                jj_error("Error while connecting: %s", error->message);
+                jj_error("Error while connecting: %s\n", error->message);
                 exit(EXIT_FAILURE);
         }
 
