@@ -41,6 +41,7 @@
 #define _GNU_SOURCE
 
 #define JJ_NS_MUC "http://jabber.org/protocol/muc"
+#define JJ_NS_MUCUSER  JJ_NS_MUC"#user"
 #define JJ_NS_VER "jabber:iq:version"
 #define JJ_NS_DISCO "http://jabber.org/protocol/disco#info"
 
@@ -89,6 +90,46 @@ typedef struct {
 static void jj_make_named_pipe(gchar *path, gboolean muc);
 static void jj_make_named_pipe_fullpath(gchar *fullpath);
 static void jj_make_named_pipe_1(gchar *path);
+
+
+static inline const char *_jj_get(LmMessage *m, const gchar *child) {
+        LmMessageNode *node;
+
+        for (node = m->node->children; node != NULL; node = node->next) {
+                if (strcmp(node->name, child) == 0) {
+                        return lm_message_node_get_value(node);
+                }
+        }
+        return NULL;
+}
+
+
+static inline const char *jj_get_show(LmMessage *m) {
+        return _jj_get(m, "show");
+}
+
+
+static inline const char *jj_get_status(LmMessage *m) {
+        return _jj_get(m, "status");
+}
+
+
+static inline LmMessageNode *jj_get_muc_node(LmMessage *m) {
+        const gchar *ns;
+        LmMessageNode *node;
+
+        for (node = m->node->children; node != NULL; node = node->next) {
+                if (strcmp(node->name, "x") == 0) {
+                        ns = lm_message_node_get_attribute(node, "xmlns");
+                        if (ns != NULL) {
+                                if (strcmp(ns, JJ_NS_MUCUSER) == 0) {
+                                        return node;
+                                }
+                        }
+                }
+        }
+        return NULL;
+}
 
 
 static jj_muc_t *jj_user_muc_find(gchar *muc) {
@@ -282,6 +323,15 @@ static void jj_writeout(char *path, char *fmt, ...) {
                         suffix = &path[len-4];
                         if (strcmp("/out", suffix) == 0) {
                                 without_suffix = strndup(path, len-4);
+                        }
+                        else if (len > 8) {
+                                /* Can also be status */
+                                suffix = &path[len-7];
+                                if (strcmp("/status", suffix) == 0) {
+                                        without_suffix = strndup(path, len-7);
+                                }
+                        }
+                        if (without_suffix != NULL) {
                                 /* Will try to create it and reports error if fails */
                                 jj_make_named_pipe_fullpath(without_suffix);
                                 free(without_suffix);
@@ -528,57 +578,133 @@ static LmHandlerResult jj_handle_presence(LmMessageHandler *handler,
                                           LmMessage *m,
                                           gpointer data) {
         gchar *path;
-        gchar **tmp;
         gchar *muc_user;
         gchar *xml;
         gchar *xml2;
+        gchar *presence;
+        const gchar *show;
+        const gchar *status;
         const gchar *from;
+        gchar **fromv;
+        /* const gchar *to; */
         LmMessageNode *child;
-
+        LmMessageNode *muc_node;
 
         xml = lm_message_node_to_string(m->node);
         jj_debug("\n%s\n", xml);
 
-        if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_ERROR) {
-                child = lm_message_node_get_child(m->node, "error");
+        muc_node = jj_get_muc_node(m);
+        from = lm_message_node_get_attribute(m->node, "from");
+        fromv = g_strsplit(from, "/", 2);
 
+        switch (lm_message_get_sub_type(m)) {
+        case LM_MESSAGE_SUB_TYPE_ERROR: {
+                child = lm_message_node_get_child(m->node, "error");
                 xml2 = lm_message_node_to_string(child);
                 jj_debug("CHILD: %s\n", xml2);
                 g_free(xml2);
-
-                jj_write_out_server("<%s> %s\n",
-                                    lm_message_node_get_attribute (m->node, "from"),
-                                    "FIXME ERROR");
-        } else if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_UNAVAILABLE) {
-                /* handler parts from mucs */
-                from = lm_message_node_get_attribute(m->node, "from");
-                tmp = g_strsplit(from, "/", 2); /* tmp[0] is muc and tmp[1] is user */
-                muc_user = jj_user_muc_find_user(tmp[0], tmp[1]);
-                if (muc_user != NULL) {
-                        jj_user_muc_remove_user(tmp[0], muc_user);
-                        path = g_strconcat(jj_user.base_path,
-                                           "/mucs/", tmp[0], "/out", NULL);
-                        jj_writeout(path, "-!- %s has left %s\n", tmp[1], tmp[0]);
-                        g_free(path);
-                }
-                g_strfreev(tmp);
-        } else if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_AVAILABLE) {
-                /* normal presence */
-                /* check if this is from muc */
-                from = lm_message_node_get_attribute(m->node, "from");
-                tmp = g_strsplit(from, "/", 2); /* tmp[0] is muc and tmp[1] is user */
-                if (jj_user_muc_find(tmp[0]) != NULL) {
-                        if (jj_user_muc_find_user(tmp[0], tmp[1]) == NULL) {
-                                /* user has joined */
-                                jj_user_muc_add_user(tmp[0], tmp[1]);
+                jj_write_out_server("<%s> %s\n", from, "FIXME ERROR");
+                presence = "ERROR";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNAVAILABLE: {
+                if (muc_node) {
+                        /* fromv[0] is muc and fromv[1] is user */
+                        muc_user = jj_user_muc_find_user(fromv[0], fromv[1]);
+                        if (muc_user != NULL) {
+                                jj_user_muc_remove_user(fromv[0], muc_user);
                                 path = g_strconcat(jj_user.base_path,
-                                                   "/mucs/", tmp[0], "/out", NULL);
-                                jj_writeout(path, "-!- %s has joined %s\n", tmp[1], tmp[0]);
+                                                   "/mucs/", fromv[0], "/out", NULL);
+                                jj_writeout(path, "-!- %s has left %s\n", fromv[1], fromv[0]);
                                 g_free(path);
                         }
                 }
-                g_strfreev(tmp);
+                presence = "UNAVAILABLE";
+                break;
         }
+        case LM_MESSAGE_SUB_TYPE_AVAILABLE: {
+                /* normal presence */
+                if (muc_node) {
+                        /* check if this is from muc */
+                        /* fromv[0] is muc and fromv[1] is user */
+                        if (jj_user_muc_find(fromv[0]) != NULL) {
+                                if (jj_user_muc_find_user(fromv[0], fromv[1]) == NULL) {
+                                        /* user has joined */
+                                        jj_user_muc_add_user(fromv[0], fromv[1]);
+                                        path = g_strconcat(jj_user.base_path,
+                                                           "/mucs/", fromv[0], "/out", NULL);
+                                        jj_writeout(path, "-!- %s has joined %s\n", fromv[1], fromv[0]);
+                                        g_free(path);
+                                }
+                        }
+                }
+                presence = "AVAILABLE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_NORMAL: {
+                presence = "NORMAL";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_CHAT: {
+                presence = "CHAT";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_GROUPCHAT: {
+                presence = "GROUPCHAT";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_HEADLINE: {
+                presence = "HEADLINE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_PROBE: {
+                presence = "PROBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SUBSCRIBE: {
+                presence = "SUBSCRIBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBE: {
+                presence = "UNSUBSCRIBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SUBSCRIBED: {
+                presence = "SUBSCRIBED";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBED: {
+                presence = "UNSUBSCRIBED";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_GET: {
+                presence = "GET";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SET: {
+                presence = "SET";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_RESULT: {
+                presence = "RESULT";
+                break;
+        }
+        default:
+                presence = "UNKNOWN";
+                break;
+        } /* switch */
+
+        if (muc_node) {
+                path = g_strconcat(jj_user.base_path, "/mucs/", from, "/status", NULL);
+        } else {
+                path = g_strconcat(jj_user.base_path, "/", fromv[0], "/status", NULL);
+        }
+        show = jj_get_show(m);
+        status = jj_get_status(m);
+        jj_writeout(path, "%s %s %s\n", presence,
+                    show ? show : "", status ? status : "");
+        g_free(path);
+        g_strfreev(fromv);
         g_free(xml);
         return LM_HANDLER_RESULT_REMOVE_MESSAGE;
 }
