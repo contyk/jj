@@ -564,7 +564,11 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                                               "/out", NULL);
                         nick = line[1];
                 }
-                jj_writeout(outpath, "<%s> %s\n", nick, body);
+		if (subject != NULL) {
+			jj_writeout(outpath, "<%s> %s: %s\n", nick, subject, body);
+		} else {
+			jj_writeout(outpath, "<%s> %s\n", nick, body);
+		}
         }
         g_free(outpath);
         g_strfreev(line);
