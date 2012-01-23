@@ -86,6 +86,82 @@ typedef struct {
 } jj_pipe_data_t;
 
 
+const char *jj_get_msg_subtype_str(LmMessage *msg) {
+        char *subtype;
+
+        switch (lm_message_get_sub_type(msg)) {
+        case LM_MESSAGE_SUB_TYPE_ERROR: {
+                subtype = "ERROR";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNAVAILABLE: {
+                subtype = "UNAVAILABLE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_AVAILABLE: {
+                subtype = "AVAILABLE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_NORMAL: {
+                subtype = "NORMAL";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_CHAT: {
+                subtype = "CHAT";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_GROUPCHAT: {
+                subtype = "GROUPCHAT";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_HEADLINE: {
+                subtype = "HEADLINE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_PROBE: {
+                subtype = "PROBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SUBSCRIBE: {
+                subtype = "SUBSCRIBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBE: {
+                subtype = "UNSUBSCRIBE";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SUBSCRIBED: {
+                subtype = "SUBSCRIBED";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBED: {
+                subtype = "UNSUBSCRIBED";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_GET: {
+                subtype = "GET";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_SET: {
+                subtype = "SET";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_RESULT: {
+                subtype = "RESULT";
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_NOT_SET: {
+                subtype = "NOT SET";
+                break;
+        }
+        default:
+                subtype = "UNKNOWN";
+                break;
+        } /* switch */
+
+        return subtype;
+}
+
 /* some prototypes */
 static void jj_make_named_pipe(gchar *path, gboolean muc);
 static void jj_make_named_pipe_fullpath(gchar *fullpath);
@@ -515,9 +591,9 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                                          LmMessage *m,
                                          gpointer data) {
         gchar **line;
-        gchar *outpath;
-        gchar *nick;
-        gchar *xml;
+        gchar *outpath = NULL;
+        gchar *nick = NULL;
+        gchar *xml = NULL;
         const gchar *body = NULL;
         const gchar *subject = NULL;
         LmMessageNode *child;
@@ -536,7 +612,10 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
         line = g_strsplit(lm_message_node_get_attribute(m->node, "from"),
                           "/", 2);
 
-        if (lm_message_get_sub_type(m) == LM_MESSAGE_SUB_TYPE_GROUPCHAT) {
+        jj_debug("message type: %s\n", jj_get_msg_subtype_str(m));
+
+        switch (lm_message_get_sub_type(m)) {
+        case LM_MESSAGE_SUB_TYPE_GROUPCHAT: {
                 nick = line[1];
                 outpath = g_strconcat(jj_user.base_path, "/mucs/", line[0], "/out", NULL);
                 /* first see if this is a topic message */
@@ -556,7 +635,9 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                                 jj_debug("not valid output <%s> %s\n", nick, body);
                         }
                 }
-        } else { /* not groupchat */
+                break;
+        }
+        case LM_MESSAGE_SUB_TYPE_CHAT: {
                 nick = line[0];
                 if (jj_user_muc_find(nick) == NULL) {
                         outpath = g_strconcat(jj_user.base_path, "/",
@@ -573,7 +654,14 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
 		} else {
 			jj_writeout(outpath, "<%s> %s\n", nick, body);
 		}
+                break;
         }
+        default: {
+                jj_printf("No handler for message with subtype %s\n",
+                          jj_get_msg_subtype_str(m));
+                break;
+        }
+        } /* switch */
         g_free(outpath);
         g_strfreev(line);
         g_free(xml);
@@ -612,7 +700,6 @@ static LmHandlerResult jj_handle_presence(LmMessageHandler *handler,
                 jj_debug("CHILD: %s\n", xml2);
                 g_free(xml2);
                 jj_write_out_server("<%s> %s\n", from, "FIXME ERROR");
-                presence = "ERROR";
                 break;
         }
         case LM_MESSAGE_SUB_TYPE_UNAVAILABLE: {
@@ -627,7 +714,6 @@ static LmHandlerResult jj_handle_presence(LmMessageHandler *handler,
                                 g_free(path);
                         }
                 }
-                presence = "UNAVAILABLE";
                 break;
         }
         case LM_MESSAGE_SUB_TYPE_AVAILABLE: {
@@ -646,60 +732,13 @@ static LmHandlerResult jj_handle_presence(LmMessageHandler *handler,
                                 }
                         }
                 }
-                presence = "AVAILABLE";
                 break;
         }
-        case LM_MESSAGE_SUB_TYPE_NORMAL: {
-                presence = "NORMAL";
+        default: {
+                jj_printf("No handler for message with subtype %s\n",
+                          jj_get_msg_subtype_str(m));
                 break;
         }
-        case LM_MESSAGE_SUB_TYPE_CHAT: {
-                presence = "CHAT";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_GROUPCHAT: {
-                presence = "GROUPCHAT";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_HEADLINE: {
-                presence = "HEADLINE";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_PROBE: {
-                presence = "PROBE";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_SUBSCRIBE: {
-                presence = "SUBSCRIBE";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBE: {
-                presence = "UNSUBSCRIBE";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_SUBSCRIBED: {
-                presence = "SUBSCRIBED";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_UNSUBSCRIBED: {
-                presence = "UNSUBSCRIBED";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_GET: {
-                presence = "GET";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_SET: {
-                presence = "SET";
-                break;
-        }
-        case LM_MESSAGE_SUB_TYPE_RESULT: {
-                presence = "RESULT";
-                break;
-        }
-        default:
-                presence = "UNKNOWN";
-                break;
         } /* switch */
 
         if (muc_node) {
@@ -709,7 +748,7 @@ static LmHandlerResult jj_handle_presence(LmMessageHandler *handler,
         }
         show = jj_get_show(m);
         status = jj_get_status(m);
-        jj_writeout(path, "%s %s %s\n", presence,
+        jj_writeout(path, "%s %s %s\n", jj_get_msg_subtype_str(m),
                     show ? show : "", status ? status : "");
         g_free(path);
         g_strfreev(fromv);
@@ -731,7 +770,7 @@ static LmHandlerResult jj_handle_iq(LmMessageHandler *handler,
         jj_debug("Incoming message from: %s\n",
                  lm_message_node_get_attribute (msg->node, "from"));
 
-        switch(lm_message_get_sub_type(msg)) {
+        switch (lm_message_get_sub_type(msg)) {
         case LM_MESSAGE_SUB_TYPE_GET:
                 if (query_node != NULL &&
                     g_ascii_strcasecmp(xmlns, JJ_NS_VER) == 0) {
