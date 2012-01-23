@@ -550,7 +550,11 @@ static LmHandlerResult jj_handle_message(LmMessageHandler *handler,
                                 jj_writeout(outpath, "-!- Topic for %s: %s\n", line[0], subject);
                         }
                 } else {
-                        jj_writeout(outpath, "<%s> %s\n", nick, body);
+                        if (nick != NULL && body != NULL) {
+                                jj_writeout(outpath, "<%s> %s\n", nick, body);
+                        } else {
+                                jj_debug("not valid output <%s> %s\n", nick, body);
+                        }
                 }
         } else { /* not groupchat */
                 nick = line[0];
