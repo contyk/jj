@@ -1,5 +1,5 @@
 # Makefile for jj
-cflags = -Wall\
+cflags = $(CFLAGS)\
 	`pkg-config --cflags loudmouth-1.0`\
 
 libs = 	`pkg-config --libs loudmouth-1.0`\
